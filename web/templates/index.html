@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compliance AI</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <h1>Compliance AI</h1>
+  <p class="meta">{{ chunk_count }} chunk · LLM {% if llm_ready %}bật{% else %}chưa có key — chỉ hiện trích dẫn{% endif %}</p>
+
+  {% if error %}<p class="err">{{ error }}</p>{% endif %}
+  {% if message %}<p class="ok">{{ message }}</p>{% endif %}
+
+  <form method="post" action="/ask">
+    <textarea name="question" rows="4" placeholder="Hỏi quy định…">{{ question }}</textarea>
+    <button type="submit">Hỏi</button>
+  </form>
+
+  {% if answer %}
+  <h2>Trả lời</h2>
+  <pre class="answer">{{ answer }}</pre>
+  {% endif %}
+
+  {% if citations %}
+  <h2>Trích dẫn</h2>
+  <ol>
+    {% for c in citations %}
+    <li>
+      <strong>{{ c.source_doc }}</strong>
+      {% if c.dieu %} · {{ c.dieu }}{% endif %}
+      {% if c.khoan %} · {{ c.khoan }}{% endif %}
+      <div class="snip">{{ c.noi_dung[:400] }}</div>
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+
+  <h2>Thêm văn bản</h2>
+  <form method="post" action="/ingest" enctype="multipart/form-data">
+    <input type="file" name="file" accept=".pdf,.docx" required>
+    <input name="source_doc" placeholder="Tên văn bản (vd. Thông tư 39/2016/TT-NHNN)" required>
+    <select name="loai_van_ban">
+      <option value="thong_tu">Thông tư</option>
+      <option value="nghi_dinh">Nghị định</option>
+      <option value="luat">Luật</option>
+      <option value="sop_noi_bo">SOP nội bộ</option>
+    </select>
+    <input name="ngay_hieu_luc" type="date" required>
+    <select name="trang_thai">
+      <option value="con_hieu_luc">Còn hiệu lực</option>
+      <option value="het_hieu_luc">Hết hiệu lực</option>
+      <option value="da_sua_doi">Đã sửa đổi</option>
+    </select>
+    <input name="van_ban_thay_the" placeholder="Văn bản thay thế (nếu có)">
+    <button type="submit">Nạp</button>
+  </form>
+
+  <h2>Văn bản mới (NHNN / Chính phủ)</h2>
+  <form method="post" action="/watch">
+    <button type="submit">Kiểm tra nguồn</button>
+  </form>
+  {% if watch %}
+  <ul>
+    {% for w in watch %}
+    <li><a href="{{ w.url }}">{{ w.title }}</a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if history %}
+  <h2>Hỏi gần đây</h2>
+  <ul>
+    {% for h in history %}
+    <li>{{ h.question }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</body>
+</html>
