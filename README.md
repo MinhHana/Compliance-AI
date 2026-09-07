@@ -11,7 +11,7 @@ cp .env.example .env   # điền LLM_API_KEY nếu muốn sinh câu trả lời
 .venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8080
 ```
 
-Mở `http://localhost:8080`. Nạp PDF/docx → hỏi.
+Mở `http://localhost:8080` hoặc qua Tailscale `http://100.113.31.89:8080`. Nạp PDF/docx → hỏi. Matrix: `/matrix`.
 
 Batch thư mục `data/raw_docs/` (kèm file `.pdf.meta.json`):
 
