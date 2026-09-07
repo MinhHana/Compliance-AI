@@ -36,15 +36,18 @@ def query(
     docs = (raw.get("documents") or [[]])[0]
     metas = (raw.get("metadatas") or [[]])[0]
     dists = (raw.get("distances") or [[]])[0]
+    ids = (raw.get("ids") or [[]])[0]
     hits = []
     for i, doc in enumerate(docs):
         meta = metas[i] if i < len(metas) else {}
         hit = {
+            "chunk_id": ids[i] if i < len(ids) else meta.get("chunk_id") or "",
             "noi_dung": doc,
             "dieu": meta.get("dieu") or None,
             "khoan": meta.get("khoan") or None,
             "tieu_de_dieu": meta.get("tieu_de_dieu") or None,
             "source_doc": meta.get("source_doc") or "",
+            "loai_van_ban": meta.get("loai_van_ban") or "",
             "file_name_goc": meta.get("file_name_goc") or "",
             "ngay_hieu_luc": meta.get("ngay_hieu_luc") or "",
             "trang_thai": meta.get("trang_thai") or "",

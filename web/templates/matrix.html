@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Traceability Matrix — Compliance AI</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="wide">
+  <nav><a href="/">Hỏi đáp</a> · <a href="/matrix">Traceability Matrix</a></nav>
+  <h1>Traceability Matrix</h1>
+  <p class="meta">{{ chunk_count }} chunk · SOP nội bộ liên kết với quy định gốc</p>
+
+  {% if error %}<p class="err">{{ error }}</p>{% endif %}
+  {% if message %}<p class="ok">{{ message }}</p>{% endif %}
+
+  <h2>Liên kết</h2>
+  {% if rows %}
+  <table>
+    <thead>
+      <tr>
+        <th>SOP Điều</th>
+        <th>Quy định liên kết</th>
+        <th>Trạng thái</th>
+        <th>Ghi chú</th>
+        <th>Xóa</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr{% if r.canh_bao %} class="warn"{% endif %}>
+        <td>{{ r.sop_label }}</td>
+        <td>
+          {{ r.qd_label }}
+          {% if r.canh_bao %}<div class="err">{{ r.canh_bao }}</div>{% endif %}
+        </td>
+        <td>{{ r.trang_thai }}</td>
+        <td>{{ r.ghi_chu }}</td>
+        <td>
+          <form method="post" action="/matrix/unlink">
+            <input type="hidden" name="link_id" value="{{ r.id }}">
+            <button type="submit">Xóa</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="meta">Chưa có liên kết.</p>
+  {% endif %}
+
+  <h2>Gợi ý liên kết</h2>
+  <form method="post" action="/matrix/suggest">
+    <select name="sop_chunk_id" required>
+      <option value="">Chọn SOP…</option>
+      {% for s in sops %}
+      <option value="{{ s.chunk_id }}" {% if suggest_sop == s.chunk_id %}selected{% endif %}>
+        {{ s.source_doc }} · {{ s.dieu }} {{ s.tieu_de_dieu }}
+      </option>
+      {% endfor %}
+    </select>
+    <button type="submit">Gợi ý</button>
+  </form>
+
+  {% if suggestions %}
+  <ol>
+    {% for s in suggestions %}
+    <li>
+      <strong>{{ s.source_doc }}</strong>
+      {% if s.dieu %} · {{ s.dieu }}{% endif %}
+      {% if s.tieu_de_dieu %} · {{ s.tieu_de_dieu }}{% endif %}
+      <div class="snip">{{ s.noi_dung[:400] }}</div>
+      <form method="post" action="/matrix/link">
+        <input type="hidden" name="sop_chunk_id" value="{{ suggest_sop }}">
+        <input type="hidden" name="quydinh_chunk_id" value="{{ s.chunk_id }}">
+        <input name="ghi_chu" placeholder="Ghi chú (tuỳ chọn)">
+        <button type="submit">Xác nhận liên kết</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ol>
+  {% elif suggest_sop %}
+  <p class="meta">Không có gợi ý phù hợp.</p>
+  {% endif %}
+</body>
+</html>

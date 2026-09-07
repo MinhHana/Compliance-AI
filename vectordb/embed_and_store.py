@@ -39,6 +39,17 @@ def collection(persist_dir: str | Path = CHROMA_DIR):
     )
 
 
+def get_chunk(chunk_id: str, persist_dir: str | Path = CHROMA_DIR) -> dict | None:
+    col = collection(persist_dir)
+    r = col.get(ids=[chunk_id])
+    if not r["ids"]:
+        return None
+    meta = dict((r["metadatas"] or [{}])[0] or {})
+    meta["noi_dung"] = (r["documents"] or [None])[0]
+    meta["chunk_id"] = chunk_id
+    return meta
+
+
 def _meta(chunk: dict) -> dict:
     skip = {"noi_dung"}
     out = {}

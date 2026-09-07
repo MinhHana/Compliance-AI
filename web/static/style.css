@@ -11,3 +11,9 @@ button { width: max-content; }
 .ok { color: #060; }
 a { color: #06c; }
 ol, ul { padding-left: 1.2rem; }
+nav { margin: 0 0 1rem; }
+body.wide { max-width: 960px; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+th, td { border-bottom: 1px solid #ddd; padding: .4rem; text-align: left; vertical-align: top; }
+tr.warn { background: #fdd; }
+td form { margin: 0; }
