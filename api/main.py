@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 
@@ -14,13 +13,17 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from api.audit import log_question, recent_questions, recent_watch
+from api.ingest_job import start_ingest, take_page_status
 from api.llm import answer, configured
-from ingestion.batch import process_file
-from ingestion.chunk_by_dieu import SourceMetadata
 from matrix.audit import find_outdated_links
 from matrix.store import create_link, delete_link, list_links
 from matrix.suggest import suggest_links
-from vectordb.embed_and_store import CHROMA_DIR, collection, get_chunk, list_documents, upsert_chunks
+from vectordb.embed_and_store import (
+    CHROMA_DIR,
+    collection,
+    get_chunk,
+    list_documents,
+)
 from vectordb.query import query as retrieve
 
 logging.basicConfig(level=logging.INFO)
@@ -44,17 +47,21 @@ def _chunk_count() -> int:
 
 
 def _page(request: Request, **extra):
+    job = take_page_status()
     ctx = {
         "request": request,
         "answer": extra.get("answer"),
         "citations": extra.get("citations") or [],
         "question": extra.get("question") or "",
-        "message": extra.get("message"),
-        "error": extra.get("error"),
+        "message": extra.get("message") or job.get("message"),
+        "error": extra.get("error") or job.get("error"),
         "chunk_count": _chunk_count(),
         "llm_ready": configured(),
         "history": recent_questions(8),
         "watch": recent_watch(8),
+        "form": extra.get("form") or {},
+        "ingest_warnings": extra.get("ingest_warnings") or job.get("warnings") or [],
+        "ingest_running": bool(job.get("running")),
     }
     return templates.TemplateResponse(request, "index.html", ctx)
 
@@ -75,49 +82,111 @@ async def ask(request: Request, question: str = Form(...)):
     return _page(request, question=q, answer=text, citations=hits)
 
 
-@app.post("/ingest")
-async def ingest(
-    request: Request,
-    file: UploadFile = File(...),
-    source_doc: str = Form(...),
-    loai_van_ban: str = Form(...),
-    ngay_hieu_luc: str = Form(...),
-    trang_thai: str = Form(...),
-    van_ban_thay_the: str = Form(""),
-):
-    name = Path(file.filename or "upload").name
-    if Path(name).suffix.lower() not in {".pdf", ".docx"}:
-        return _page(request, error="Chỉ nhận PDF hoặc Word (.docx).")
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
-    dest = RAW_DIR / name
-    dest.write_bytes(await file.read())
+def _ingest_meta(
+    source_doc: str,
+    loai_van_ban: str,
+    ngay_hieu_luc: str,
+    trang_thai: str,
+    van_ban_thay_the: str,
+    source_url: str = "",
+    ngay_ban_hanh: str = "",
+    ly_do_ban_hanh: str = "",
+    pending_file: str = "",
+    co_quan_ban_hanh: str = "",
+) -> dict:
     meta = {
         "source_doc": source_doc.strip(),
         "loai_van_ban": loai_van_ban,
-        "ngay_hieu_luc": ngay_hieu_luc,
-        "trang_thai": trang_thai,
+        "ngay_hieu_luc": ngay_hieu_luc.strip(),
+        "trang_thai": trang_thai.strip(),
         "van_ban_thay_the": van_ban_thay_the.strip() or None,
+        "ngay_ban_hanh": ngay_ban_hanh.strip(),
+        "ly_do_ban_hanh": ly_do_ban_hanh.strip(),
+        "co_quan_ban_hanh": co_quan_ban_hanh.strip(),
+        "pending_file": pending_file.strip(),
     }
-    dest.with_suffix(dest.suffix + ".meta.json").write_text(
-        json.dumps(meta, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    if source_url:
+        meta["source_url"] = source_url.strip()
+    return meta
+
+
+def _pending_path(name: str) -> Path | None:
+    if not name or Path(name).name != name:
+        return None
+    path = RAW_DIR / name
+    return path if path.is_file() else None
+
+
+@app.post("/ingest")
+async def ingest(
+    request: Request,
+    file: UploadFile | None = File(None),
+    source_url: str = Form(""),
+    source_doc: str = Form(""),
+    loai_van_ban: str = Form(""),
+    ngay_hieu_luc: str = Form(""),
+    trang_thai: str = Form(""),
+    van_ban_thay_the: str = Form(""),
+    ngay_ban_hanh: str = Form(""),
+    ly_do_ban_hanh: str = Form(""),
+    pending_file: str = Form(""),
+    co_quan_ban_hanh: str = Form(""),
+):
+    filename = (file.filename if file else "") or ""
+    has_file = bool(filename.strip())
+    url = source_url.strip()
+    pending = _pending_path(pending_file.strip())
+    if not has_file and not url and pending is None:
+        return _page(request, error="Tải file PDF/Word hoặc dán link văn bản.")
+    if not trang_thai.strip():
+        return _page(request, error="Chọn hiệu lực của văn bản.")
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    meta = _ingest_meta(
+        source_doc,
+        loai_van_ban,
+        ngay_hieu_luc,
+        trang_thai,
+        van_ban_thay_the,
+        url,
+        ngay_ban_hanh,
+        ly_do_ban_hanh,
+        pending_file.strip(),
+        co_quan_ban_hanh,
     )
-    try:
-        source = SourceMetadata.from_dict(meta)
-        result = process_file(dest, source, PROCESSED_DIR)
-    except Exception as exc:
-        logger.exception("Ingest lỗi")
-        return _page(request, error=str(exc))
-    if not result.get("ok"):
-        return _page(request, error=result.get("error") or "Ingest lỗi")
-    if result.get("needs_ocr"):
-        return _page(request, message=f"{name} là PDF scan — cần OCR thủ công, chưa đưa vào DB.")
-    try:
-        n = upsert_chunks(result.get("chunk_dicts") or [])
-    except Exception as exc:
-        logger.exception("Embed lỗi")
-        return _page(request, error=str(exc))
-    return _page(request, message=f"Đã nạp {name}: {n} chunk.")
+    dest: Path | None = None
+    if has_file:
+        name = Path(filename).name
+        if Path(name).suffix.lower() not in {".pdf", ".docx"}:
+            return _page(request, error="Chỉ nhận PDF hoặc Word (.docx).", form=meta)
+        dest = RAW_DIR / name
+        dest.write_bytes(await file.read())
+        label = name
+    elif url and pending is None:
+        label = url
+    else:
+        dest = pending
+        if dest is None:
+            return _page(
+                request,
+                error="Tải file PDF/Word hoặc dán link văn bản.",
+                form=meta,
+            )
+        label = url or dest.name
+    started = start_ingest(
+        dest=dest,
+        url=url,
+        meta=meta,
+        label=label,
+        raw_dir=RAW_DIR,
+        processed_dir=PROCESSED_DIR,
+    )
+    if not started:
+        return _page(
+            request,
+            error="Đang nạp văn bản khác — đợi xong rồi thử lại.",
+            form=meta,
+        )
+    return _page(request, message=f"Đang nạp {label}…", form=meta)
 
 
 @app.post("/watch")
@@ -200,14 +269,19 @@ def _matrix_page(request: Request, **extra):
 
 
 @app.get("/library", response_class=HTMLResponse)
-def library(request: Request):
+def library(request: Request, canh_bao: str = ""):
+    level = canh_bao.strip().lower()
+    docs = list_documents()
+    if level in {"red", "yellow", "gray"}:
+        docs = [d for d in docs if d.get("warn_level") == level]
     return templates.TemplateResponse(
         request,
         "library.html",
         {
             "request": request,
-            "docs": list_documents(),
+            "docs": docs,
             "chunk_count": _chunk_count(),
+            "canh_bao": level if level in {"red", "yellow", "gray"} else "",
         },
     )
 
