@@ -119,9 +119,12 @@ async def ingest(
 @app.post("/watch")
 def watch(request: Request):
     from ingestion.watch_nhnn import run
+    from ingestion.watch_summary import summarize_new_items
 
     try:
         items = run()
+        if items:
+            items = summarize_new_items(items)
     except Exception as exc:
         return _page(request, error=str(exc))
     msg = f"Có {len(items)} mục mới." if items else "Không có văn bản mới."
