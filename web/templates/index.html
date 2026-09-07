@@ -62,13 +62,32 @@
   <form method="post" action="/watch">
     <button type="submit">Kiểm tra nguồn</button>
   </form>
-  {% if watch %}
-  <ul>
-    {% for w in watch %}
-    <li><a href="{{ w.url }}">{{ w.title }}</a></li>
-    {% endfor %}
-  </ul>
-  {% endif %}
+  <div class="watch-wrap">
+  <table class="watch">
+    <thead>
+      <tr>
+        <th>Tiêu đề</th>
+        <th>Loại văn bản</th>
+        <th>Số hiệu</th>
+        <th>Tóm tắt</th>
+        <th>Link gốc</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for w in watch %}
+      <tr>
+        <td>{{ w.title }}</td>
+        <td>{{ w.loai_van_ban_doan or "—" }}</td>
+        <td>{{ w.so_hieu or "—" }}</td>
+        <td>{{ w.tom_tat or "" }}</td>
+        <td><a href="{{ w.url }}">mở</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5">Chưa có văn bản mới.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
 
   {% if history %}
   <h2>Hỏi gần đây</h2>
