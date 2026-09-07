@@ -112,7 +112,11 @@ async def ingest(
         return _page(request, error=result.get("error") or "Ingest lỗi")
     if result.get("needs_ocr"):
         return _page(request, message=f"{name} là PDF scan — cần OCR thủ công, chưa đưa vào DB.")
-    n = upsert_chunks(result.get("chunk_dicts") or [])
+    try:
+        n = upsert_chunks(result.get("chunk_dicts") or [])
+    except Exception as exc:
+        logger.exception("Embed lỗi")
+        return _page(request, error=str(exc))
     return _page(request, message=f"Đã nạp {name}: {n} chunk.")
 
 

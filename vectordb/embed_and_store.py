@@ -33,10 +33,19 @@ def _client(persist_dir: str | Path = CHROMA_DIR):
 
 
 def collection(persist_dir: str | Path = CHROMA_DIR):
-    return _client(persist_dir).get_or_create_collection(
-        COLLECTION,
-        embedding_function=_embedding_function(),
-    )
+    client = _client(persist_dir)
+    ef = _embedding_function()
+    try:
+        return client.get_or_create_collection(COLLECTION, embedding_function=ef)
+    except ValueError as exc:
+        if "Embedding function conflict" not in str(exc):
+            raise
+        logger.warning("Collection embedding lệch, tạo lại %s", COLLECTION)
+        try:
+            client.delete_collection(COLLECTION)
+        except Exception:
+            logger.exception("Không xóa được collection cũ")
+        return client.get_or_create_collection(COLLECTION, embedding_function=ef)
 
 
 def get_chunk(chunk_id: str, persist_dir: str | Path = CHROMA_DIR) -> dict | None:
