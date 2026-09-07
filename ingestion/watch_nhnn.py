@@ -20,6 +20,16 @@ URLS_FILE = ROOT / "config" / "watch_urls.txt"
 BLOCKED_HOSTS = {"thuvienphapluat.vn", "www.thuvienphapluat.vn"}
 HREF_RE = re.compile(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', re.I | re.S)
 TAG_RE = re.compile(r"<[^>]+>")
+SCRIPT_STYLE_RE = re.compile(r"<(script|style)\b[^>]*>.*?</\1\s*>", re.I | re.S)
+DEGREE_RE = re.compile(r"[°º℃℉]")
+JUNK_TITLE_MARKERS = (
+    "datalayer",
+    "function",
+    "font-face",
+    "document.ready",
+    "gtag",
+    "mobile.detect",
+)
 SO_HIEU_RE = re.compile(r"\d+[/\-]\d{4}[/\-][A-ZĐ]+(?:[/\-][A-ZĐ]+)*", re.I)
 LOAI_PATTERNS = (
     (re.compile(r"thông\s*tư", re.I), "thong_tu"),
@@ -36,9 +46,40 @@ LOAI_FROM_SO_HIEU = (
 WATCH_EXTRA_COLS = ("loai_van_ban_doan", "so_hieu", "tom_tat")
 
 DEFAULT_URLS = [
-    "https://vanban.chinhphu.vn/",
-    "https://www.sbv.gov.vn/",
+    "https://vbpl.vn/nganhangnhanuoc/Pages/Home.aspx",
 ]
+
+KEEP_KEYWORDS = (
+    "thông tư",
+    "nghị định",
+    "luật",
+    "quyết định",
+    "chỉ thị",
+    "công văn",
+    "dự thảo",
+    "lấy ý kiến",
+    "vbqppl",
+    "tt-nhnn",
+    "nd-cp",
+    "nđ-cp",
+    "qh",
+    "sop",
+    "quy chế",
+    "quy trình",
+)
+DENY_SUBSTRINGS = (
+    "trang chủ",
+    "giới thiệu",
+    "liên hệ",
+    "đăng nhập",
+    "tìm kiếm",
+    "doanh nghiệp",
+    "báo điện tử",
+    "thư điện tử",
+    "nước chxhcn",
+    "chính phủ",
+)
+MENU_EXACT = "văn bản quy phạm pháp luật"
 
 
 def parse_doc_ref(title: str) -> dict:
@@ -105,7 +146,36 @@ def _host_ok(url: str) -> bool:
 
 
 def _clean(html: str) -> str:
+    html = SCRIPT_STYLE_RE.sub("", html or "")
     return re.sub(r"\s+", " ", TAG_RE.sub("", html)).strip()
+
+
+def is_junk_title(title: str) -> bool:
+    text = title or ""
+    lowered = text.lower()
+    if any(marker in lowered for marker in JUNK_TITLE_MARKERS):
+        return True
+    return bool(DEGREE_RE.search(text))
+
+
+def is_compliance_doc(title: str, url: str = "") -> bool:
+    """Keep banking-compliance docs only. url is unused; kept for the Watch API filter."""
+    del url
+    text = title or ""
+    lowered = text.lower()
+    if is_junk_title(text):
+        return False
+    if lowered.strip() == MENU_EXACT:
+        return False
+    if any(deny in lowered for deny in DENY_SUBSTRINGS):
+        return False
+    ref = parse_doc_ref(text)
+    so_hieu = ref.get("so_hieu")
+    if len(text) < 20 and not so_hieu:
+        return False
+    if ref.get("loai_van_ban_doan") or so_hieu:
+        return True
+    return any(kw in lowered for kw in KEEP_KEYWORDS)
 
 
 def fetch_links(url: str) -> list[tuple[str, str]]:
@@ -121,10 +191,10 @@ def fetch_links(url: str) -> list[tuple[str, str]]:
     found = []
     for href, inner in HREF_RE.findall(resp.text):
         title = _clean(inner)
-        if len(title) < 12:
-            continue
         full = urljoin(url, href)
         if not _host_ok(full):
+            continue
+        if not is_compliance_doc(title, full):
             continue
         found.append((full, title[:300]))
     return found
