@@ -19,6 +19,40 @@ def configured() -> bool:
     return bool(_settings()[0])
 
 
+def summarize_snippet(text: str) -> str:
+    """Gọi LLM (nếu có key) tóm tắt 1 câu tiếng Việt. Không có key hoặc lỗi → trả về text[:200]."""
+    snippet = (text or "")[:800]
+    if not snippet:
+        return ""
+    key, base, model = _settings()
+    if not key:
+        return snippet[:200]
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Tóm tắt đúng 1 câu tiếng Việt, ngắn gọn, chỉ dựa trên đoạn được cung cấp."
+                ),
+            },
+            {"role": "user", "content": snippet},
+        ],
+        "temperature": 0.1,
+    }
+    try:
+        resp = httpx.post(
+            f"{base}/chat/completions",
+            headers={"Authorization": f"Bearer {key}"},
+            json=payload,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception:
+        return snippet[:200]
+
+
 def _relevant(hits: list[dict]) -> list[dict]:
     return [
         h
