@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import httpx
 
@@ -15,6 +16,19 @@ FETCH_TIMEOUT = 15
 SNIPPET_CHARS = 800
 FALLBACK_CHARS = 200
 UNREACHABLE = "không truy cập được"
+NO_SUMMARY = "không tóm tắt được"
+CODE_TOMTAT_RE = re.compile(
+    r"datalayer|gtag|font-face|@font-face|<script|function\(|window\.",
+    re.I,
+)
+
+
+def sanitize_tom_tat(text: str) -> str:
+    if not text:
+        return text or ""
+    if CODE_TOMTAT_RE.search(text):
+        return NO_SUMMARY
+    return text
 
 
 def _fetch_text(url: str) -> str | None:
@@ -40,6 +54,7 @@ def summarize_new_items(items: list[dict]) -> list[dict]:
             tom_tat = summarize_snippet(snippet)
         else:
             tom_tat = snippet[:FALLBACK_CHARS]
+        tom_tat = sanitize_tom_tat(tom_tat)
         updated = {**item, "tom_tat": tom_tat}
         item_id = item.get("id")
         if item_id:
