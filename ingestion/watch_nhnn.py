@@ -20,6 +20,20 @@ URLS_FILE = ROOT / "config" / "watch_urls.txt"
 BLOCKED_HOSTS = {"thuvienphapluat.vn", "www.thuvienphapluat.vn"}
 HREF_RE = re.compile(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', re.I | re.S)
 TAG_RE = re.compile(r"<[^>]+>")
+SO_HIEU_RE = re.compile(r"\d+[/\-]\d{4}[/\-][A-ZĐ]+(?:[/\-][A-ZĐ]+)*", re.I)
+LOAI_PATTERNS = (
+    (re.compile(r"thông\s*tư", re.I), "thong_tu"),
+    (re.compile(r"nghị\s*định", re.I), "nghi_dinh"),
+    (re.compile(r"quyết\s*định", re.I), "quyet_dinh"),
+    (re.compile(r"\bluật\b", re.I), "luat"),
+)
+LOAI_FROM_SO_HIEU = (
+    (re.compile(r"TT", re.I), "thong_tu"),
+    (re.compile(r"N[ĐD]", re.I), "nghi_dinh"),
+    (re.compile(r"Q[ĐD]", re.I), "quyet_dinh"),
+    (re.compile(r"QH", re.I), "luat"),
+)
+WATCH_EXTRA_COLS = ("loai_van_ban_doan", "so_hieu", "tom_tat")
 
 DEFAULT_URLS = [
     "https://vanban.chinhphu.vn/",
@@ -27,9 +41,27 @@ DEFAULT_URLS = [
 ]
 
 
-def _db() -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+def parse_doc_ref(title: str) -> dict:
+    """Nhận diện loại văn bản + số hiệu từ tiêu đề. Không nhận diện được thì None, không crash."""
+    text = title or ""
+    so_hieu = None
+    m = SO_HIEU_RE.search(text)
+    if m:
+        so_hieu = m.group(0)
+    loai = None
+    for pat, value in LOAI_PATTERNS:
+        if pat.search(text):
+            loai = value
+            break
+    if loai is None and so_hieu:
+        for pat, value in LOAI_FROM_SO_HIEU:
+            if pat.search(so_hieu):
+                loai = value
+                break
+    return {"loai_van_ban_doan": loai, "so_hieu": so_hieu}
+
+
+def _ensure_watch_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS watch_items (
@@ -41,7 +73,18 @@ def _db() -> sqlite3.Connection:
         )
         """
     )
+    for col in WATCH_EXTRA_COLS:
+        try:
+            conn.execute(f"ALTER TABLE watch_items ADD COLUMN {col} TEXT")
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
+
+
+def _db() -> sqlite3.Connection:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    _ensure_watch_schema(conn)
     return conn
 
 
@@ -99,12 +142,32 @@ def run() -> list[dict]:
             ).fetchone()
             if exists:
                 continue
+            ref = parse_doc_ref(title)
             conn.execute(
-                "INSERT INTO watch_items (id, url, title, source, first_seen) VALUES (?,?,?,?,?)",
-                (item_id, link, title, source, now),
+                """
+                INSERT INTO watch_items
+                    (id, url, title, source, first_seen, loai_van_ban_doan, so_hieu)
+                VALUES (?,?,?,?,?,?,?)
+                """,
+                (
+                    item_id,
+                    link,
+                    title,
+                    source,
+                    now,
+                    ref["loai_van_ban_doan"],
+                    ref["so_hieu"],
+                ),
             )
             new_items.append(
-                {"id": item_id, "url": link, "title": title, "source": source}
+                {
+                    "id": item_id,
+                    "url": link,
+                    "title": title,
+                    "source": source,
+                    "loai_van_ban_doan": ref["loai_van_ban_doan"],
+                    "so_hieu": ref["so_hieu"],
+                }
             )
     conn.commit()
     conn.close()
