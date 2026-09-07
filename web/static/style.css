@@ -8,7 +8,13 @@ button { width: max-content; }
 .answer { white-space: pre-wrap; background: #f6f6f6; padding: .8rem; }
 .snip { color: #333; margin-top: .2rem; white-space: pre-wrap; }
 .err { color: #a00; }
+.warn { color: #a60; margin: .4rem 0 1rem; padding-left: 1.2rem; }
+.warn-list { margin: .4rem 0 1rem; padding-left: 1.2rem; }
+.lvl-red { color: #a00; }
+.lvl-yellow { color: #a60; }
+.lvl-gray { color: #666; }
 .ok { color: #060; }
+label.field { display: flex; flex-direction: column; gap: .15rem; font-size: .9rem; color: #333; }
 a { color: #06c; }
 ol, ul { padding-left: 1.2rem; }
 nav { margin: 0 0 1rem; }
@@ -16,6 +22,10 @@ body.wide { max-width: 960px; }
 table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 th, td { border-bottom: 1px solid #ddd; padding: .4rem; text-align: left; vertical-align: top; }
 tr.warn { background: #fdd; }
+tr.warn-red { background: #fdd; }
+tr.warn-yellow { background: #ffc; }
+tr.warn-gray { background: #eee; }
+tr.stale { background: #ffc; }
 td form { margin: 0; }
 .watch-wrap { overflow-x: auto; }
 table.watch { font-size: .85rem; }

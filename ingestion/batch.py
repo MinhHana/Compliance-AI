@@ -10,6 +10,7 @@ from ingestion.chunk_by_dieu import (
     write_chunks_json,
 )
 from ingestion.extract_text import ExtractionError, extract_text
+from ingestion.fetch_url import FetchUrlError, fetch_law_document, write_fetched
 
 logger = logging.getLogger("ingestion")
 
@@ -43,6 +44,20 @@ def process_file(
         "output": str(out),
         "chunk_dicts": [c.to_dict() for c in chunks],
     }
+
+
+def process_url(
+    url: str,
+    source_metadata: SourceMetadata,
+    raw_dir: str | Path = RAW_DIR,
+    processed_dir: str | Path = PROCESSED_DIR,
+) -> dict:
+    fetched = fetch_law_document(url)
+    dest = write_fetched(fetched, Path(raw_dir))
+    try:
+        return process_file(dest, source_metadata, processed_dir)
+    except ExtractionError as exc:
+        raise FetchUrlError(str(exc)) from exc
 
 
 def process_directory(

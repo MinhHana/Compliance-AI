@@ -4,8 +4,13 @@ import os
 
 import httpx
 
+from ingestion.doc_attrs import hieu_luc_chua_ro
+
 MAX_DISTANCE = 0.6
 REFUSAL = "Không tìm thấy đoạn quy định đủ liên quan..."
+UNCLEAR_HIEU_LUC = (
+    "CẢNH BÁO ĐỎ: một số trích dẫn chưa rõ hiệu lực — không mặc định còn hiệu lực."
+)
 
 
 def _settings() -> tuple[str, str, str]:
@@ -61,13 +66,25 @@ def _relevant(hits: list[dict]) -> list[dict]:
     ]
 
 
+def _mark_hieu_luc(hits: list[dict]) -> list[dict]:
+    for hit in hits:
+        hit["hieu_luc_chua_ro"] = hieu_luc_chua_ro(hit)
+    return hits
+
+
+def _with_unclear_banner(text: str, hits: list[dict]) -> str:
+    if any(h.get("hieu_luc_chua_ro") for h in hits):
+        return UNCLEAR_HIEU_LUC + "\n\n" + text
+    return text
+
+
 def answer(question: str, hits: list[dict]) -> str:
-    relevant = _relevant(hits)
+    relevant = _mark_hieu_luc(_relevant(hits))
     if not relevant:
         return REFUSAL
     key, base, model = _settings()
     if not key:
-        return _fallback(relevant)
+        return _with_unclear_banner(_fallback(relevant), relevant)
     context = "\n\n".join(_format_hit(i, h) for i, h in enumerate(relevant, 1))
     payload = {
         "model": model,
@@ -77,7 +94,9 @@ def answer(question: str, hits: list[dict]) -> str:
                 "content": (
                     "Bạn là trợ lý tuân thủ ngân hàng. Chỉ trả lời dựa trên các đoạn "
                     "quy định được cung cấp. Mỗi ý phải nêu Điều và tên văn bản. "
-                    "Không đủ căn cứ thì nói không đủ thông tin."
+                    "Không đủ căn cứ thì nói không đủ thông tin. "
+                    "Nếu đoạn chưa rõ hiệu lực hoặc hết hiệu lực, phải nêu rõ, "
+                    "không viết như đang còn hiệu lực."
                 ),
             },
             {
@@ -95,9 +114,15 @@ def answer(question: str, hits: list[dict]) -> str:
             timeout=60,
         )
         resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"].strip()
+        return _with_unclear_banner(
+            resp.json()["choices"][0]["message"]["content"].strip(),
+            relevant,
+        )
     except Exception as exc:
-        return f"{_fallback(hits)}\n\n(LLM lỗi: {exc})"
+        return _with_unclear_banner(
+            f"{_fallback(relevant)}\n\n(LLM lỗi: {exc})",
+            relevant,
+        )
 
 
 def _format_hit(i: int, hit: dict) -> str:
