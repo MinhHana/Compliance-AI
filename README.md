@@ -25,4 +25,9 @@ Cron cảnh báo văn bản mới (không crawl thuvienphapluat.vn):
 PYTHONPATH=. .venv/bin/python -m ingestion.watch_nhnn
 ```
 
+```bash
+# Chạy watch mỗi ngày 8h sáng (crontab -e trên Pi):
+0 8 * * * cd /home/pi/Compliance && PYTHONPATH=. .venv/bin/python -m ingestion.watch_nhnn
+```
+
 Test: `PYTHONPATH=. .venv/bin/pytest -q`
