@@ -20,7 +20,7 @@ from ingestion.chunk_by_dieu import SourceMetadata
 from matrix.audit import find_outdated_links
 from matrix.store import create_link, delete_link, list_links
 from matrix.suggest import suggest_links
-from vectordb.embed_and_store import CHROMA_DIR, collection, get_chunk, upsert_chunks
+from vectordb.embed_and_store import CHROMA_DIR, collection, get_chunk, list_documents, upsert_chunks
 from vectordb.query import query as retrieve
 
 logging.basicConfig(level=logging.INFO)
@@ -197,6 +197,19 @@ def _matrix_page(request: Request, **extra):
         "chunk_count": _chunk_count(),
     }
     return templates.TemplateResponse(request, "matrix.html", ctx)
+
+
+@app.get("/library", response_class=HTMLResponse)
+def library(request: Request):
+    return templates.TemplateResponse(
+        request,
+        "library.html",
+        {
+            "request": request,
+            "docs": list_documents(),
+            "chunk_count": _chunk_count(),
+        },
+    )
 
 
 @app.get("/matrix", response_class=HTMLResponse)

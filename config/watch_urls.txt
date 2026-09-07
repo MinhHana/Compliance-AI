@@ -1,3 +1,2 @@
-# Chỉ nguồn Chính phủ / NHNN. Không thêm thuvienphapluat.vn (ToS).
-https://vanban.chinhphu.vn/
-https://www.sbv.gov.vn/
+# Cơ sở dữ liệu Quốc gia về Văn bản Pháp luật — ngành NHNN. Không thêm thuvienphapluat.vn (ToS).
+https://vbpl.vn/nganhangnhanuoc/Pages/Home.aspx
