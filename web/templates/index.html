@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <nav><a href="/">Hỏi đáp</a> · <a href="/matrix">Traceability Matrix</a></nav>
+  <nav><a href="/">Hỏi đáp</a> · <a href="/library">Kho văn bản</a> · <a href="/matrix">Traceability Matrix</a></nav>
   <h1>Compliance AI</h1>
   <p class="meta">{{ chunk_count }} chunk · LLM {% if llm_ready %}bật{% else %}chưa có key — chỉ hiện trích dẫn{% endif %}</p>
 
@@ -32,6 +32,8 @@
       <strong>{{ c.source_doc }}</strong>
       {% if c.dieu %} · {{ c.dieu }}{% endif %}
       {% if c.khoan %} · {{ c.khoan }}{% endif %}
+      {% if c.hieu_luc_chua_ro %}<div class="lvl-red">Chưa rõ hiệu lực — không mặc định còn hiệu lực</div>{% endif %}
+      {% if c.canh_bao_het_hieu_luc %}<div class="lvl-yellow">Không phải còn hiệu lực</div>{% endif %}
       <div class="snip">{{ c.noi_dung[:400] }}</div>
     </li>
     {% endfor %}
@@ -39,22 +41,27 @@
   {% endif %}
 
   <h2>Thêm văn bản</h2>
+  <p class="meta">Tải file hoặc dán link. Tiêu đề lấy từ tài liệu. Chỉ cần chọn hiệu lực.</p>
+  {% if ingest_warnings %}
+  <ul class="warn-list">
+    {% for w in ingest_warnings %}
+    <li class="lvl-{{ w.level if w.level is defined else 'yellow' }}">{{ w.text if w.text is defined else w }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
   <form method="post" action="/ingest" enctype="multipart/form-data">
-    <input type="file" name="file" accept=".pdf,.docx" required>
-    <input name="source_doc" placeholder="Tên văn bản (vd. Thông tư 39/2016/TT-NHNN)" required>
-    <select name="loai_van_ban">
-      <option value="thong_tu">Thông tư</option>
-      <option value="nghi_dinh">Nghị định</option>
-      <option value="luat">Luật</option>
-      <option value="sop_noi_bo">SOP nội bộ</option>
-    </select>
-    <input name="ngay_hieu_luc" type="date" required>
-    <select name="trang_thai">
-      <option value="con_hieu_luc">Còn hiệu lực</option>
-      <option value="het_hieu_luc">Hết hiệu lực</option>
-      <option value="da_sua_doi">Đã sửa đổi</option>
-    </select>
-    <input name="van_ban_thay_the" placeholder="Văn bản thay thế (nếu có)">
+    {% set f = form or {} %}
+    <input type="hidden" name="pending_file" value="{{ f.pending_file or '' }}">
+    <input type="file" name="file" accept=".pdf,.docx">
+    <input name="source_url" type="url" placeholder="Hoặc dán link văn bản (https://…)" value="{{ f.source_url or '' }}">
+    <label class="field">Hiệu lực
+      <select name="trang_thai" required>
+        <option value="" disabled {% if not f.trang_thai %}selected{% endif %}>Chọn hiệu lực</option>
+        <option value="con_hieu_luc" {% if f.trang_thai == "con_hieu_luc" %}selected{% endif %}>Còn hiệu lực</option>
+        <option value="het_hieu_luc" {% if f.trang_thai == "het_hieu_luc" %}selected{% endif %}>Hết hiệu lực</option>
+        <option value="da_sua_doi" {% if f.trang_thai == "da_sua_doi" %}selected{% endif %}>Đã sửa đổi</option>
+      </select>
+    </label>
     <button type="submit">Nạp</button>
   </form>
 
@@ -70,6 +77,7 @@
         <th>Loại văn bản</th>
         <th>Số hiệu</th>
         <th>Tóm tắt</th>
+        <th>Gợi ý</th>
         <th>Link gốc</th>
       </tr>
     </thead>
@@ -80,14 +88,19 @@
         <td>{{ w.loai_van_ban_doan or "—" }}</td>
         <td>{{ w.so_hieu or "—" }}</td>
         <td>{{ w.tom_tat or "" }}</td>
+        <td class="lvl-gray">{{ w.goi_y_thay_the or "" }}</td>
         <td><a href="{{ w.url }}">mở</a></td>
       </tr>
       {% else %}
-      <tr><td colspan="5">Chưa có văn bản mới.</td></tr>
+      <tr><td colspan="6">Chưa có văn bản mới.</td></tr>
       {% endfor %}
     </tbody>
   </table>
   </div>
+
+  {% if ingest_running %}
+  <script>setTimeout(function () { location.reload(); }, 2000);</script>
+  {% endif %}
 
   {% if history %}
   <h2>Hỏi gần đây</h2>

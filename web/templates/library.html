@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kho văn bản — Compliance AI</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="wide">
+  <nav><a href="/">Hỏi đáp</a> · <a href="/library">Kho văn bản</a> · <a href="/matrix">Traceability Matrix</a></nav>
+  <h1>Kho văn bản đã nạp</h1>
+  <p class="meta">{{ chunk_count }} chunk · nhóm theo văn bản nguồn
+    · lọc:
+    <a href="/library">tất cả</a>
+    · <a href="/library?canh_bao=red">đỏ</a>
+    · <a href="/library?canh_bao=yellow">vàng</a>
+    · <a href="/library?canh_bao=gray">xám</a>
+    {% if canh_bao %} · đang lọc {{ canh_bao }}{% endif %}
+  </p>
+
+  {% if docs %}
+  <table>
+    <thead>
+      <tr>
+        <th>Tên văn bản</th>
+        <th>Loại</th>
+        <th>Cơ quan</th>
+        <th>Ngày ban hành</th>
+        <th>Ngày hiệu lực</th>
+        <th>Trạng thái</th>
+        <th>Lý do ban hành</th>
+        <th>Cảnh báo</th>
+        <th>Số Điều đã nạp</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in docs %}
+      <tr class="{% if d.warn_level == 'red' %}warn-red{% elif d.warn_level == 'yellow' %}warn-yellow{% elif d.trang_thai and d.trang_thai != 'con_hieu_luc' %}stale{% elif d.warn_level == 'gray' %}warn-gray{% endif %}">
+        <td>{{ d.source_doc }}</td>
+        <td>{{ d.loai_van_ban }}</td>
+        <td>{{ d.co_quan_ban_hanh or "—" }}</td>
+        <td>{{ d.ngay_ban_hanh or "—" }}</td>
+        <td>{{ d.ngay_hieu_luc or "—" }}</td>
+        <td>{{ d.trang_thai or "chưa rõ" }}</td>
+        <td class="snip">{{ (d.ly_do_ban_hanh or "—")[:160] }}</td>
+        <td>
+          {% for w in d.attr_warnings or [] %}
+          <div class="lvl-{{ w.level }}">{{ w.text }}</div>
+          {% endfor %}
+        </td>
+        <td>{{ d.so_chunk }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="meta">Chưa có văn bản trong kho.</p>
+  {% endif %}
+</body>
+</html>

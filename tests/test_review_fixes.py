@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from api.llm import REFUSAL, answer
-from vectordb.embed_and_store import upsert_chunks
+from vectordb.embed_and_store import list_documents, upsert_chunks
 from vectordb.query import query
 
 
@@ -53,6 +53,47 @@ def test_query_default_only_active(tmp_path: Path):
     assert len(hits) == 1
     assert hits[0]["trang_thai"] == "con_hieu_luc"
     assert hits[0].get("canh_bao_het_hieu_luc") is not True
+
+
+def test_query_includes_empty_trang_thai(tmp_path: Path):
+    upsert_chunks(
+        [
+            _chunk("unk", "Tổ chức tín dụng lập hồ sơ cho vay gồm hồ sơ đề nghị vay vốn.", "")
+            | {"source_doc": "39/2016/TT-NHNN", "ngay_hieu_luc": ""},
+            _chunk("sop", "Bảng phân chia thẩm quyền tín dụng nội bộ.", "con_hieu_luc")
+            | {"source_doc": "SOP nội bộ"},
+            _chunk("exp", "Tổ chức tín dụng lập hồ sơ cho vay gồm hồ sơ đề nghị vay vốn.", "het_hieu_luc")
+            | {"source_doc": "Thông tư hết hiệu lực"},
+        ],
+        tmp_path,
+    )
+    hits = query("hồ sơ cho vay gồm những gì", persist_dir=tmp_path)
+    assert hits
+    assert hits[0]["chunk_id"] == "unk"
+    assert {h["trang_thai"] for h in hits} <= {"", "con_hieu_luc"}
+    assert all(h.get("source_doc") != "Thông tư hết hiệu lực" for h in hits)
+
+
+def test_list_documents_empty(tmp_path: Path):
+    assert list_documents(tmp_path) == []
+
+
+def test_list_documents_groups_by_source(tmp_path: Path):
+    upsert_chunks(
+        [
+            _chunk("a1", "Điều 1 cho vay.", "con_hieu_luc") | {"ngay_hieu_luc": "2017-03-15"},
+            _chunk("a2", "Điều 2 bảo đảm.", "con_hieu_luc") | {"ngay_hieu_luc": "2017-03-15"},
+            _chunk("b1", "Điều 1 khác.", "het_hieu_luc")
+            | {"source_doc": "Nghị định test", "ngay_hieu_luc": "2024-01-01"},
+        ],
+        tmp_path,
+    )
+    docs = list_documents(tmp_path)
+    assert [d["source_doc"] for d in docs] == ["Nghị định test", "Thông tư test"]
+    by_name = {d["source_doc"]: d for d in docs}
+    assert by_name["Thông tư test"]["so_chunk"] == 2
+    assert by_name["Nghị định test"]["so_chunk"] == 1
+    assert by_name["Nghị định test"]["trang_thai"] == "het_hieu_luc"
 
 
 def test_unrelated_question_refuses(monkeypatch):
