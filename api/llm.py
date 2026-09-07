@@ -4,6 +4,9 @@ import os
 
 import httpx
 
+MAX_DISTANCE = 0.6
+REFUSAL = "Không tìm thấy đoạn quy định đủ liên quan..."
+
 
 def _settings() -> tuple[str, str, str]:
     key = os.environ.get("LLM_API_KEY") or os.environ.get("XAI_API_KEY") or ""
@@ -16,11 +19,22 @@ def configured() -> bool:
     return bool(_settings()[0])
 
 
+def _relevant(hits: list[dict]) -> list[dict]:
+    return [
+        h
+        for h in hits
+        if h.get("distance") is not None and h["distance"] <= MAX_DISTANCE
+    ]
+
+
 def answer(question: str, hits: list[dict]) -> str:
+    relevant = _relevant(hits)
+    if not relevant:
+        return REFUSAL
     key, base, model = _settings()
     if not key:
-        return _fallback(hits)
-    context = "\n\n".join(_format_hit(i, h) for i, h in enumerate(hits, 1))
+        return _fallback(relevant)
+    context = "\n\n".join(_format_hit(i, h) for i, h in enumerate(relevant, 1))
     payload = {
         "model": model,
         "messages": [

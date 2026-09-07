@@ -12,6 +12,19 @@ PROCESSED_DIR = ROOT / "data" / "processed"
 COLLECTION = "compliance"
 
 
+EMBEDDING_MODEL = "BAAI/bge-m3"
+_EF = None
+
+
+def _embedding_function():
+    global _EF
+    if _EF is None:
+        from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+
+        _EF = SentenceTransformerEmbeddingFunction(model_name=EMBEDDING_MODEL)
+    return _EF
+
+
 def _client(persist_dir: str | Path = CHROMA_DIR):
     import chromadb
 
@@ -20,7 +33,10 @@ def _client(persist_dir: str | Path = CHROMA_DIR):
 
 
 def collection(persist_dir: str | Path = CHROMA_DIR):
-    return _client(persist_dir).get_or_create_collection(COLLECTION)
+    return _client(persist_dir).get_or_create_collection(
+        COLLECTION,
+        embedding_function=_embedding_function(),
+    )
 
 
 def _meta(chunk: dict) -> dict:

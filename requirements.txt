@@ -5,6 +5,7 @@ uvicorn
 jinja2
 python-multipart
 chromadb
+sentence-transformers
 httpx
 python-dotenv
 pytest
