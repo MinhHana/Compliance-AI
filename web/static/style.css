@@ -17,3 +17,5 @@ table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 th, td { border-bottom: 1px solid #ddd; padding: .4rem; text-align: left; vertical-align: top; }
 tr.warn { background: #fdd; }
 td form { margin: 0; }
+.watch-wrap { overflow-x: auto; }
+table.watch { font-size: .85rem; }

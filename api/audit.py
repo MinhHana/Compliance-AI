@@ -54,20 +54,17 @@ def recent_questions(limit: int = 20) -> list[dict]:
 
 
 def recent_watch(limit: int = 30) -> list[dict]:
+    from ingestion.watch_nhnn import _ensure_watch_schema
+
     conn = _conn()
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS watch_items (
-            id TEXT PRIMARY KEY,
-            url TEXT NOT NULL,
-            title TEXT NOT NULL,
-            source TEXT NOT NULL,
-            first_seen TEXT NOT NULL
-        )
-        """
-    )
+    _ensure_watch_schema(conn)
     rows = conn.execute(
-        "SELECT title, url, source, first_seen FROM watch_items ORDER BY first_seen DESC LIMIT ?",
+        """
+        SELECT title, url, source, first_seen, loai_van_ban_doan, so_hieu, tom_tat
+        FROM watch_items
+        ORDER BY first_seen DESC
+        LIMIT ?
+        """,
         (limit,),
     ).fetchall()
     conn.close()
