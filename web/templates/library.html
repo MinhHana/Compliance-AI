@@ -2,9 +2,14 @@
 <html lang="vi">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Kho văn bản — Compliance AI</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="stylesheet" href="/static/style.css?v=9">
 </head>
 <body class="wide">
   <nav><a href="/">Hỏi đáp</a> · <a href="/library">Kho văn bản</a> · <a href="/matrix">Traceability Matrix</a></nav>
@@ -17,42 +22,131 @@
     · <a href="/library?canh_bao=gray">xám</a>
     {% if canh_bao %} · đang lọc {{ canh_bao }}{% endif %}
   </p>
+  <p class="meta">Thiếu thuộc tính thì bổ sung ngay trên từng văn bản — không cần nạp lại.</p>
+  {% if error %}<p class="err">{{ error }}</p>{% endif %}
+  {% if message %}<p class="ok">{{ message }}</p>{% endif %}
 
-  {% if docs %}
-  <table>
+  <h2>Thêm văn bản</h2>
+  <p class="meta">Tải file hoặc dán link. Tiêu đề lấy từ tài liệu. Chỉ cần chọn hiệu lực.</p>
+  {% if ingest_warnings %}
+  <ul class="warn-list">
+    {% for w in ingest_warnings %}
+    <li class="lvl-{{ w.level if w.level is defined else 'yellow' }}">{{ w.text if w.text is defined else w }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <form method="post" action="/ingest" enctype="multipart/form-data">
+    {% set f = form or {} %}
+    <input type="hidden" name="pending_file" value="{{ f.pending_file or '' }}">
+    <input type="file" name="file" accept=".pdf,.docx">
+    <input name="source_url" type="url" placeholder="Hoặc dán link văn bản (https://…)" value="{{ f.source_url or '' }}">
+    <label class="field">Hiệu lực
+      <select name="trang_thai" required>
+        <option value="" disabled {% if not f.trang_thai %}selected{% endif %}>Chọn hiệu lực</option>
+        <option value="con_hieu_luc" {% if f.trang_thai == "con_hieu_luc" %}selected{% endif %}>Còn hiệu lực</option>
+        <option value="het_hieu_luc" {% if f.trang_thai == "het_hieu_luc" %}selected{% endif %}>Hết hiệu lực</option>
+        <option value="da_sua_doi" {% if f.trang_thai == "da_sua_doi" %}selected{% endif %}>Đã sửa đổi</option>
+      </select>
+    </label>
+    <button type="submit">Nạp</button>
+  </form>
+
+  <h2>Văn bản mới (NHNN / Chính phủ)</h2>
+  <form method="post" action="/watch">
+    <button type="submit">Kiểm tra nguồn</button>
+  </form>
+  <div class="watch-wrap">
+  <table class="watch">
     <thead>
       <tr>
-        <th>Tên văn bản</th>
-        <th>Loại</th>
-        <th>Cơ quan</th>
-        <th>Ngày ban hành</th>
-        <th>Ngày hiệu lực</th>
-        <th>Trạng thái</th>
-        <th>Lý do ban hành</th>
-        <th>Cảnh báo</th>
-        <th>Số Điều đã nạp</th>
+        <th>Tiêu đề</th>
+        <th>Loại văn bản</th>
+        <th>Số hiệu</th>
+        <th>Tóm tắt</th>
+        <th>Gợi ý</th>
+        <th>Link gốc</th>
       </tr>
     </thead>
     <tbody>
-      {% for d in docs %}
-      <tr class="{% if d.warn_level == 'red' %}warn-red{% elif d.warn_level == 'yellow' %}warn-yellow{% elif d.trang_thai and d.trang_thai != 'con_hieu_luc' %}stale{% elif d.warn_level == 'gray' %}warn-gray{% endif %}">
-        <td>{{ d.source_doc }}</td>
-        <td>{{ d.loai_van_ban }}</td>
-        <td>{{ d.co_quan_ban_hanh or "—" }}</td>
-        <td>{{ d.ngay_ban_hanh or "—" }}</td>
-        <td>{{ d.ngay_hieu_luc or "—" }}</td>
-        <td>{{ d.trang_thai or "chưa rõ" }}</td>
-        <td class="snip">{{ (d.ly_do_ban_hanh or "—")[:160] }}</td>
-        <td>
-          {% for w in d.attr_warnings or [] %}
-          <div class="lvl-{{ w.level }}">{{ w.text }}</div>
-          {% endfor %}
-        </td>
-        <td>{{ d.so_chunk }}</td>
+      {% for w in watch %}
+      <tr>
+        <td data-label="Tiêu đề">{{ w.title }}</td>
+        <td data-label="Loại">{{ w.loai_van_ban_doan or "—" }}</td>
+        <td data-label="Số hiệu">{{ w.so_hieu or "—" }}</td>
+        <td data-label="Tóm tắt">{{ w.tom_tat or "" }}</td>
+        <td class="lvl-gray" data-label="Gợi ý">{{ w.goi_y_thay_the or "" }}</td>
+        <td data-label="Link"><a href="{{ w.url }}">mở</a></td>
       </tr>
+      {% else %}
+      <tr><td colspan="6">Chưa có văn bản mới.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+  </div>
+
+  {% if ingest_running %}
+  <script>setTimeout(function () { location.replace("/library"); }, 2000);</script>
+  {% endif %}
+
+  <h2>Đã nạp</h2>
+  {% if docs %}
+  <ul class="doc-list">
+    {% for d in docs %}
+    <li class="doc-card {% if d.warn_level == 'red' %}warn-red{% elif d.warn_level == 'yellow' %}warn-yellow{% elif d.trang_thai and d.trang_thai != 'con_hieu_luc' %}stale{% elif d.warn_level == 'gray' %}warn-gray{% endif %}">
+      <div class="doc-head">
+        <strong class="doc-title">{{ d.source_doc }}</strong>
+        <p class="meta">{{ d.loai_van_ban or "—" }}
+          · {{ d.trang_thai or "chưa rõ" }}
+          · ban hành {{ d.ngay_ban_hanh or "—" }}
+          · hiệu lực {{ d.ngay_hieu_luc or "—" }}
+          · {{ d.so_chunk }} Điều
+        </p>
+        {% if d.co_quan_ban_hanh %}<p class="meta">{{ d.co_quan_ban_hanh }}</p>{% endif %}
+        {% if d.ly_do_ban_hanh %}<p class="snip">{{ d.ly_do_ban_hanh[:160] }}</p>{% endif %}
+        {% for w in d.attr_warnings or [] %}
+        <div class="lvl-{{ w.level }}">{{ w.text }}</div>
+        {% endfor %}
+      </div>
+      <details class="doc-edit">
+        <summary>Sửa thuộc tính</summary>
+        <form class="attr-form" method="post" action="/library/attrs">
+          <input type="hidden" name="source_doc" value="{{ d.source_doc }}">
+          <input type="hidden" name="canh_bao" value="{{ canh_bao }}">
+          <label class="field">Loại
+            <select name="loai_van_ban">
+              {% for loai in loai_choices %}
+              <option value="{{ loai }}" {% if d.loai_van_ban == loai %}selected{% endif %}>{{ loai }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="field{% if not d.co_quan_ban_hanh %} missing{% endif %}">Cơ quan
+            <input name="co_quan_ban_hanh" value="{{ d.co_quan_ban_hanh or '' }}" placeholder="còn thiếu">
+          </label>
+          <label class="field{% if not d.ngay_ban_hanh %} missing{% endif %}">Ngày ban hành
+            <input type="date" name="ngay_ban_hanh" value="{{ d.ngay_ban_hanh or '' }}">
+          </label>
+          <label class="field{% if not d.ngay_hieu_luc %} missing{% endif %}">Ngày hiệu lực
+            <input type="date" name="ngay_hieu_luc" value="{{ d.ngay_hieu_luc or '' }}">
+          </label>
+          <label class="field{% if not d.trang_thai %} missing{% endif %}">Trạng thái
+            <select name="trang_thai">
+              {% for val, label in trang_thai_choices %}
+              <option value="{{ val }}" {% if (d.trang_thai or '') == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="field{% if not d.ly_do_ban_hanh %} missing{% endif %}">Lý do ban hành
+            <textarea name="ly_do_ban_hanh" rows="2" placeholder="còn thiếu">{{ d.ly_do_ban_hanh or '' }}</textarea>
+          </label>
+          <label class="field{% if d.trang_thai in ['het_hieu_luc', 'da_sua_doi'] and not d.van_ban_thay_the %} missing{% endif %}">Văn bản thay thế
+            <input name="van_ban_thay_the" value="{{ d.van_ban_thay_the or '' }}" placeholder="nếu hết hiệu lực / sửa đổi">
+          </label>
+          <button type="submit">Lưu thuộc tính</button>
+        </form>
+      </details>
+    </li>
+    {% endfor %}
+  </ul>
   {% else %}
   <p class="meta">Chưa có văn bản trong kho.</p>
   {% endif %}
